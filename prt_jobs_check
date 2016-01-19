@@ -1,0 +1,62 @@
+#!/usr/local/bin/ruby
+
+require 'rubygems'
+require 'net/ssh'
+require 'etc'
+
+class PrintJobs
+
+  HOST = ARGV[0]
+  USERNAME = Etc.getlogin
+  PASSWORD = nil
+
+  if ARGV[0] == nil
+    puts
+    puts "===  USAGE: print_jobs_check <server>  ==="
+    puts
+  else
+    def scan_for_jobs
+      check_jobs = Net::SSH.start(HOST, USERNAME, :password => PASSWORD) do |ssh|
+        cmd = "prt_jobs"
+        info = ssh.exec!(cmd)
+        if info == nil
+          puts "No print jobs on server #{HOST}"
+        else
+          res = info.split("\n").reject {|line| line.match(/\s+Time.now/)}.join("\n")
+          puts res
+          #write_data
+          print "Process into kill que: "
+          input = STDIN.gets.chomp.upcase
+          if input == "YES"
+            kill_que(ssh, check_jobs, res)
+          else
+            exit 1
+          end
+        end
+      end
+    end
+
+    def kill_que(ssh, check_jobs, res)
+      puts "Loading jobs into kill que.."
+      column = 0
+      job_ids = res.lines.map { |job| job.split(/\s+/)[0] }.each do |task_id|
+        kill_jobs(ssh, task_id)
+      end
+    end
+
+    def kill_jobs(ssh, task_id)
+      #execute = Net::SSH.start(HOST, USERNAME, :password => PASSWORD)
+      id_to_strip = task_id.gsub(/\-/," ")
+      column = 1
+      stripping_id = id_to_strip.lines.map { |task| task.split(/\s+/)[1] }.each do |id|
+        id.strip!
+        puts "Cancelling job: #{id}"
+        #`sudo cancel #{id}`
+        ssh.exec!("sudo cancel #{id}")
+      end
+    end
+  end
+end
+
+  killer = PrintJobs.new
+  killer.scan_for_jobs
